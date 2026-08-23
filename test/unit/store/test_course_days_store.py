@@ -3,6 +3,7 @@
 DBへは接続せず、DbClientをモックにして呼び出しと組み立てを検証する。
 """
 
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -115,16 +116,25 @@ def test_select_excludes_keys_not_requested(
 ) -> None:
     """要求していないキーを戻り値へ含めない.
 
-    カラムごとのIN条件では要求した組の上位集合が返るため、取り出す側で絞る必要がある。
+    主キーは4カラムの組であり、カラムごとのIN条件では組の直積が返る。要求した2つの
+    キーの値を組み替えたキー（どのカラムもIN条件には一致する）が混ざっても、
+    取り出す側で除外できることを検証する。
     """
-    other = ("05", "2025", "0615", "B")
+    requested_a = ("05", "2025", "0608", "A")
+    requested_b = ("06", "2025", "0615", "B")
+    # 4カラムとも要求キーのどれかに含まれるが、組としては要求していない
+    unwanted = ("05", "2025", "0615", "B")
     mock_db_client.select.return_value = pd.DataFrame(
-        [_make_row(_KEY_A, _VALUES_A), _make_row(other, _VALUES_B)]
+        [
+            _make_row(requested_a, _VALUES_A),
+            _make_row(requested_b, _VALUES_B),
+            _make_row(unwanted, _VALUES_B),
+        ]
     )
 
-    result = store.select([_KEY_A])
+    result = store.select([requested_a, requested_b])
 
-    assert set(result) == {_KEY_A}
+    assert set(result) == {requested_a, requested_b}
 
 
 def test_select_converts_values_to_expected_types(
@@ -162,7 +172,26 @@ def test_upsert_builds_row_with_db_column_names(
     store.upsert({_KEY_A: _VALUES_A})
 
     df = mock_db_client.upsert.call_args.args[1]
-    assert df.iloc[0].to_dict() == _make_row(_KEY_A, _VALUES_A)
+    row = df.iloc[0].to_dict()
+    row.pop("updated_at")
+    assert row == _make_row(_KEY_A, _VALUES_A)
+
+
+def test_upsert_sets_updated_at(store: CourseDaysStore, mock_db_client: MagicMock) -> None:
+    """保存する行にupdated_atが入る.
+
+    DEFAULT NOW()はINSERTのときにしか効かず、upsertが更新するのは渡したDataFrameに
+    含まれるカラムだけである。入れないと更新しても登録時のままになる。
+    """
+    before = datetime.now(UTC)
+
+    store.upsert({_KEY_A: _VALUES_A})
+
+    df = mock_db_client.upsert.call_args.args[1]
+    updated_at = df.iloc[0]["updated_at"]
+    assert isinstance(updated_at, datetime)
+    assert updated_at.tzinfo is not None
+    assert before <= updated_at <= datetime.now(UTC)
 
 
 def test_upsert_saves_all_keys_in_one_call(

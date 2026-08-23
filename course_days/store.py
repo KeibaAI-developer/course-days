@@ -5,6 +5,7 @@
 """
 
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -89,11 +90,16 @@ class CourseDaysStore:
             self._logger.debug("保存対象が無いためクエリを発行しません")
             return
 
+        # updated_atは明示的に入れる。DEFAULT NOW()はINSERTのときにしか効かず、
+        # upsertが更新するのは渡したDataFrameに含まれるカラムだけであるため、
+        # 入れないと更新しても登録時のままになる
+        updated_at = datetime.now(UTC)
         rows = []
         for key, course_days in values.items():
             row: dict[str, Any] = dict(zip(PRIMARY_KEYS, key, strict=True))
             for column, db_column in COLUMN_TO_DB.items():
                 row[db_column] = course_days[column]
+            row["updated_at"] = updated_at
             rows.append(row)
 
         self._logger.debug("course_daysを保存します: %d件", len(rows))
