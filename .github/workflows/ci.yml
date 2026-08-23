@@ -1,0 +1,16 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  ci:
+    uses: KeibaAI-developer/library-workflow/.github/workflows/ci.yml@develop
+    secrets: inherit
+    with:
+      package_name: course_days
+      repo_name: course-days
+      dependency_library: 'keiba-data-interface@develop db-client@develop'
