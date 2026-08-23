@@ -50,6 +50,36 @@ pip install -e /path/to/course-days
 | `elapsed_days` | SMALLINT | 芝コース経過日数 |
 | `course_week` | SMALLINT | 芝コース週目 |
 
+## 使い方
+
+### 取得
+
+```python
+from course_days import CourseDaysCache, get_course_days
+
+race_basic_info = data_interface.get_race_basic_info(race_code)
+cache = CourseDaysCache()  # 同じ開催日のレースを続けて処理するなら渡す
+result = get_course_days(race_basic_info, data_interface, db_client, cache=cache)
+```
+
+保存済みならDBを読むだけ、未保存ならその場で計算して保存します。**`course_days` テーブルが存在することが前提です。**
+
+### 一括計算・保存
+
+予測時・学習データ生成時に読むだけで済むよう、あらかじめ流しておきます。テーブルが無ければ作成します。
+
+```bash
+# 未保存の開催日数を数える
+python scripts/compute_course_days.py --start_date 2025-12-01 --end_date 2025-12-31 --count_only
+
+# 計算して保存する
+python scripts/compute_course_days.py --start_date 2020-01-01 --end_date 2025-12-31
+```
+
+**保存済みの開催日は計算し直しません。** 途中で止まっても再実行すれば続きから進みます。100件ごとに保存するため、長時間の実行が途中で落ちてもそこまでの結果は残ります。
+
+実行例は `example/` を参照してください。
+
 ## ドキュメント
 
 - [SPEC](https://github.com/KeibaAI-developer/course-days/issues/1) — 仕様

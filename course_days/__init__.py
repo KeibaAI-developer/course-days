@@ -5,6 +5,7 @@
 """
 
 from course_days.calculator import CourseDaysCache, calc_course_days
+from course_days.computer import CourseDaysComputer
 from course_days.exceptions import CourseDaysError, LookbackLimitExceededError
 from course_days.getters import get_course_days
 from course_days.params import (
@@ -20,6 +21,7 @@ __all__ = [
     "COURSE_DAYS_TYPES",
     "TABLE_NAME",
     "CourseDaysCache",
+    "CourseDaysComputer",
     "CourseDaysError",
     "CourseDaysKey",
     "CourseDaysStore",
