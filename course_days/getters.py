@@ -40,6 +40,10 @@ def get_course_days(
     ある。計算そのものが失敗した場合は例外をそのまま伝播させる。未保存だったことは
     `logger.info` に残し、バッチの実行漏れに気づけるようにする。
 
+    **`course_days` テーブルが存在することが前提である。** テーブルの作成は
+    `CourseDaysStore.setup` かバッチ（`CourseDaysComputer`）の役割とし、取得のたびに
+    DDLを走らせない。
+
     Args:
         race_basic_info (pd.DataFrame): レース基本情報（1行）
         data_interface (DataInterface): 未保存だった場合の計算に使う
@@ -80,15 +84,17 @@ def get_course_days(
         return apply_course_days(df, saved[key])
 
     logger.info("コース日数が未保存のため計算して保存します: キー=%s", key)
-    calculated = calculate(race_basic_info, data_interface, logger.getChild("calculator"), cache)
+    # 計算にはキャッシュを渡さない。calc_course_daysは計算した値をキャッシュへ入れるため、
+    # 保存に失敗しても値だけが残り、次回以降はDBを見ずに未保存の値を返してしまう
+    calculated = calculate(
+        race_basic_info, data_interface, logger.getChild("calculator"), None
+    )
     # DBから読んだときと同じPythonの型に揃える。計算結果はpandasの型になっている
     values = {
         column: _to_python(column, calculated[column].iloc[0]) for column in COURSE_DAYS_COLUMNS
     }
-    # テーブルが無い環境でも動くよう、書き込む直前に作る。保存済みの開催日ではここへ
-    # 来ないため、DDLが走るのは未保存だったときだけである
-    store.setup()
     store.upsert({key: values})
+    # キャッシュへ入れるのは保存が成功したあと
     if cache is not None:
         cache.set_course_days(key, values)
     return apply_course_days(df, values)
