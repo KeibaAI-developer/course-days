@@ -4,6 +4,7 @@
 保存する。予測時・学習データ生成時は保存済みの値を読むだけで済ませる。
 """
 
+from course_days.calculator import CourseDaysCache, calc_course_days
 from course_days.exceptions import CourseDaysError, LookbackLimitExceededError
 from course_days.params import COURSE_DAYS_COLUMNS, COURSE_DAYS_TYPES, TABLE_NAME
 
@@ -11,6 +12,8 @@ __all__ = [
     "COURSE_DAYS_COLUMNS",
     "COURSE_DAYS_TYPES",
     "TABLE_NAME",
+    "CourseDaysCache",
     "CourseDaysError",
     "LookbackLimitExceededError",
+    "calc_course_days",
 ]
