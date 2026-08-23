@@ -92,6 +92,9 @@ class CourseDaysComputer:
         Returns:
             int: 未保存の開催日数
         """
+        # 保存済みかどうかを見るためテーブルを読む。テーブルが無い環境でも数えられる
+        # よう、computeと同じく先に作る
+        self._store.setup()
         return len(self._collect_remaining(start_date, end_date))
 
     def collect_targets(self, start_date: str, end_date: str) -> list[CourseDaysKey]:

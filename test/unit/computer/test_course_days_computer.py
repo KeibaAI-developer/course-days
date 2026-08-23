@@ -152,6 +152,20 @@ def test_count_remaining_does_not_save(
     mock_calc.assert_not_called()
 
 
+def test_count_remaining_creates_table(
+    computer: CourseDaysComputer, mock_store: MagicMock
+) -> None:
+    """count_remainingもテーブルを作成する.
+
+    保存済みかどうかを見るためテーブルを読むため、テーブルが無い環境では
+    読み出しの時点で失敗する。
+    """
+    with patch("course_days.computer.get_course_kubun_of_day", return_value="A"):
+        computer.count_remaining(_START, _END)
+
+    mock_store.setup.assert_called_once()
+
+
 def test_collect_targets_builds_keys_from_schedule(computer: CourseDaysComputer) -> None:
     """開催スケジュールからキーが組み立てられる."""
     with patch("course_days.computer.get_course_kubun_of_day", return_value="B"):
@@ -216,9 +230,27 @@ def test_compute_saves_in_chunks(
     assert mock_store.upsert.call_count == 3
 
 
-def test_targets_keep_schedule_order(computer: CourseDaysComputer) -> None:
-    """キーの並びが競馬場コード順・開催日順になる."""
+def test_targets_are_ordered_by_venue_then_schedule(
+    computer: CourseDaysComputer, mock_data_interface: MagicMock
+) -> None:
+    """キーが競馬場コードの昇順に並び、同一競馬場内では開催スケジュールの並びを保つ.
+
+    開催日は開催スケジュールが返した順のまま扱う（並べ替えない）。競馬場コードだけを
+    見るテストでは、開催日の扱いが壊れても気づけない。
+    """
+    mock_data_interface.get_schedule.return_value = _make_schedule(
+        [
+            ("06", "2025", "0622"),
+            ("05", "2025", "0615"),
+            ("05", "2025", "0608"),
+        ]
+    )
+
     with patch("course_days.computer.get_course_kubun_of_day", return_value="A"):
         targets: list[CourseDaysKey] = computer.collect_targets(_START, _END)
 
-    assert [key[0] for key in targets] == ["05", "06"]
+    assert targets == [
+        ("05", "2025", "0615", "A"),
+        ("05", "2025", "0608", "A"),
+        ("06", "2025", "0622", "A"),
+    ]

@@ -280,6 +280,75 @@ def apply_course_days(df: pd.DataFrame, values: dict[str, Any]) -> pd.DataFrame:
     return df
 
 
+def get_course_kubun_of_day(
+    data_interface: DataInterface,
+    schedule_row: "pd.Series[Any]",
+    logger: logging.Logger,
+    cache: CourseDaysCache | None = None,
+) -> str | None:
+    """開催日のコース区分を取得する
+
+    レース番号1〜12のレース基本情報を取得し、レース番号の小さい順に見て最初に
+    見つかった芝レースのコース区分を返す。芝コースのコース区分は競馬場・開催日単位で
+    共通であるため、1レース分の情報で判定できる。
+    開催日に存在しないレース番号は読み飛ばす。
+
+    一括取得に対応したProviderでは12レース分を1回で取得する。レース番号ごとに
+    取得すると1開催日あたり最大12回の問い合わせが発生し、コース日数の計算が
+    入力生成全体のボトルネックになるため。
+
+    Args:
+        data_interface (DataInterface): 過去レース取得に使用するデータ取得層
+        schedule_row (pd.Series): 開催スケジュールの1行
+        logger (logging.Logger): ロガーインスタンス
+        cache (CourseDaysCache | None): 判定結果のキャッシュ
+
+    Returns:
+        str | None: コース区分（A〜E）。芝レースが存在しない開催日はNone
+    """
+    key = (
+        str(schedule_row["競馬場コード"]),
+        str(schedule_row["開催年"]),
+        str(schedule_row["開催月日"]),
+    )
+    if cache is not None:
+        is_cached, cached_kubun = cache.get_course_kubun(key)
+        if is_cached:
+            return cached_kubun
+
+    race_codes = _build_race_codes_of_day(schedule_row)
+    if data_interface.supports_bulk:
+        course_kubun = _find_course_kubun_in_bulk(data_interface, race_codes)
+    else:
+        course_kubun = _find_course_kubun_one_by_one(data_interface, race_codes, logger)
+
+    if course_kubun is None:
+        logger.debug(
+            "芝レースが存在しない開催日です: 開催年=%s, 開催月日=%s",
+            schedule_row["開催年"],
+            schedule_row["開催月日"],
+        )
+    if cache is not None:
+        cache.set_course_kubun(key, course_kubun)
+    return course_kubun
+
+
+def extract_venue_days(schedule_df: pd.DataFrame, keibajo_code: str) -> pd.DataFrame:
+    """開催スケジュールから指定競馬場の開催日行を新しい順に取り出す
+
+    Args:
+        schedule_df (pd.DataFrame): 開催スケジュールのDataFrame
+        keibajo_code (str): 競馬場コード（2桁）
+
+    Returns:
+        pd.DataFrame: 指定競馬場の開催日行（開催日の降順、開催日単位で重複排除）
+    """
+    df = schedule_df[schedule_df["競馬場コード"] == keibajo_code]
+    df = df.drop_duplicates(subset=["開催年", "開催月日"])
+    df = df.sort_values(["開催年", "開催月日"], ascending=False)
+    return df.reset_index(drop=True)
+
+
 def _collect_same_course_days(
     data_interface: DataInterface,
     keibajo_code: str,
@@ -369,59 +438,6 @@ def _get_schedule(
     return schedule_df
 
 
-def get_course_kubun_of_day(
-    data_interface: DataInterface,
-    schedule_row: "pd.Series[Any]",
-    logger: logging.Logger,
-    cache: CourseDaysCache | None = None,
-) -> str | None:
-    """開催日のコース区分を取得する
-
-    レース番号1〜12のレース基本情報を取得し、レース番号の小さい順に見て最初に
-    見つかった芝レースのコース区分を返す。芝コースのコース区分は競馬場・開催日単位で
-    共通であるため、1レース分の情報で判定できる。
-    開催日に存在しないレース番号は読み飛ばす。
-
-    一括取得に対応したProviderでは12レース分を1回で取得する。レース番号ごとに
-    取得すると1開催日あたり最大12回の問い合わせが発生し、コース日数の計算が
-    入力生成全体のボトルネックになるため。
-
-    Args:
-        data_interface (DataInterface): 過去レース取得に使用するデータ取得層
-        schedule_row (pd.Series): 開催スケジュールの1行
-        logger (logging.Logger): ロガーインスタンス
-        cache (CourseDaysCache | None): 判定結果のキャッシュ
-
-    Returns:
-        str | None: コース区分（A〜E）。芝レースが存在しない開催日はNone
-    """
-    key = (
-        str(schedule_row["競馬場コード"]),
-        str(schedule_row["開催年"]),
-        str(schedule_row["開催月日"]),
-    )
-    if cache is not None:
-        is_cached, cached_kubun = cache.get_course_kubun(key)
-        if is_cached:
-            return cached_kubun
-
-    race_codes = _build_race_codes_of_day(schedule_row)
-    if data_interface.supports_bulk:
-        course_kubun = _find_course_kubun_in_bulk(data_interface, race_codes)
-    else:
-        course_kubun = _find_course_kubun_one_by_one(data_interface, race_codes, logger)
-
-    if course_kubun is None:
-        logger.debug(
-            "芝レースが存在しない開催日です: 開催年=%s, 開催月日=%s",
-            schedule_row["開催年"],
-            schedule_row["開催月日"],
-        )
-    if cache is not None:
-        cache.set_course_kubun(key, course_kubun)
-    return course_kubun
-
-
 def _build_race_codes_of_day(schedule_row: "pd.Series[Any]") -> list[str]:
     """開催日のレース番号1〜12に対応する16桁レースコードを組み立てる
 
@@ -507,22 +523,6 @@ def _extract_course_kubun(race_row: "pd.Series[Any]") -> str | None:
     if race_row["芝ダ"] != "芝" or pd.isna(race_row["コース区分"]):
         return None
     return str(race_row["コース区分"])
-
-
-def extract_venue_days(schedule_df: pd.DataFrame, keibajo_code: str) -> pd.DataFrame:
-    """開催スケジュールから指定競馬場の開催日行を新しい順に取り出す
-
-    Args:
-        schedule_df (pd.DataFrame): 開催スケジュールのDataFrame
-        keibajo_code (str): 競馬場コード（2桁）
-
-    Returns:
-        pd.DataFrame: 指定競馬場の開催日行（開催日の降順、開催日単位で重複排除）
-    """
-    df = schedule_df[schedule_df["競馬場コード"] == keibajo_code]
-    df = df.drop_duplicates(subset=["開催年", "開催月日"])
-    df = df.sort_values(["開催年", "開催月日"], ascending=False)
-    return df.reset_index(drop=True)
 
 
 def _to_date(year: str, monthday: str) -> date:
