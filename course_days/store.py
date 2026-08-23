@@ -11,10 +11,13 @@ from typing import Any
 import pandas as pd
 from db_client import DbClient
 
-from course_days.params import COLUMN_TO_DB, PRIMARY_KEYS, TABLE_DDL, TABLE_NAME
-
-# 主キーの型（競馬場コード, 開催年, 開催月日, コース区分）
-CourseDaysKey = tuple[str, str, str, str]
+from course_days.params import (
+    COLUMN_TO_DB,
+    PRIMARY_KEYS,
+    TABLE_DDL,
+    TABLE_NAME,
+    CourseDaysKey,
+)
 
 
 class CourseDaysStore:

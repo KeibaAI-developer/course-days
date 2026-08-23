@@ -6,7 +6,14 @@
 
 from course_days.calculator import CourseDaysCache, calc_course_days
 from course_days.exceptions import CourseDaysError, LookbackLimitExceededError
-from course_days.params import COURSE_DAYS_COLUMNS, COURSE_DAYS_TYPES, TABLE_NAME
+from course_days.getters import get_course_days
+from course_days.params import (
+    COURSE_DAYS_COLUMNS,
+    COURSE_DAYS_TYPES,
+    TABLE_NAME,
+    CourseDaysKey,
+)
+from course_days.store import CourseDaysStore
 
 __all__ = [
     "COURSE_DAYS_COLUMNS",
@@ -14,6 +21,9 @@ __all__ = [
     "TABLE_NAME",
     "CourseDaysCache",
     "CourseDaysError",
+    "CourseDaysKey",
+    "CourseDaysStore",
     "LookbackLimitExceededError",
     "calc_course_days",
+    "get_course_days",
 ]

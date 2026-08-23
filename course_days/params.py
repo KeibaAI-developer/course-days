@@ -24,7 +24,10 @@ COURSE_DAYS_TYPES: dict[str, str] = {
 # 芝コース日数を保存するテーブル名
 TABLE_NAME: str = "course_days"
 
-# course_daysテーブルの主キー
+# 芝コース日数を識別するキー（競馬場コード, 開催年, 開催月日, コース区分）
+CourseDaysKey = tuple[str, str, str, str]
+
+# course_daysテーブルの主キー。CourseDaysKeyの要素と同じ順序であること
 PRIMARY_KEYS: list[str] = ["keibajo_code", "kaisai_year", "kaisai_month_day", "course_kubun"]
 
 # 芝コース日数のカラム名 → テーブルのカラム名
