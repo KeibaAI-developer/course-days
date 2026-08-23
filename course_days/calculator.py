@@ -18,14 +18,6 @@ from keiba_data_interface import DataInterface
 
 from course_days.exceptions import LookbackLimitExceededError
 
-# 芝コース日数情報のカラム名リスト
-COURSE_DAYS_COLUMNS: list[str] = [
-    "芝コース日目",
-    "芝コース初日",
-    "芝コース経過日数",
-    "芝コース週目",
-]
-
 # 同一コースの開催間隔がこの日数以上空いた場合、コース使用がリセットされたとみなす
 _RESET_GAP_DAYS = 14
 # 開催間隔がこの日数以下なら同一週の開催とみなす

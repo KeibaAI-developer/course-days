@@ -8,11 +8,9 @@ from datetime import date, timedelta
 
 import pandas as pd
 import pytest
-from keiba_data_interface.course_days import (
-    COURSE_DAYS_COLUMNS,
-    CourseDaysCache,
-    calc_course_days,
-)
+
+from course_days.calculator import CourseDaysCache, calc_course_days
+from course_days.params import COURSE_DAYS_COLUMNS
 
 from .conftest import (
     KEIBAJO_CODE,
