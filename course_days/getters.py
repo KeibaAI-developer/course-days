@@ -11,7 +11,12 @@ import pandas as pd
 from db_client import DbClient
 from keiba_data_interface import DataInterface
 
-from course_days.calculator import CourseDaysCache, apply_course_days, build_key
+from course_days.calculator import (
+    CourseDaysCache,
+    apply_course_days,
+    apply_missing_course_days,
+    build_key,
+)
 from course_days.calculator import calc_course_days as calculate
 from course_days.params import COURSE_DAYS_COLUMNS
 from course_days.store import CourseDaysStore
@@ -28,7 +33,8 @@ def get_course_days(
 
     処理の流れ。
 
-    1. 芝レースでない、またはコース区分が不明なら4カラムをNaNのまま返す
+    1. 芝レースでない、またはコース区分が不明なら4カラムを欠損値で設定して返す
+       （レース基本情報に4カラムが無くても、対象のレースと同じカラム構成・dtypeになる）
     2. メモリキャッシュにあればそれを使う
     3. `course_days` テーブルを引く
     4. 保存されていればその値を設定して返す
@@ -67,7 +73,7 @@ def get_course_days(
             "芝レースでないかコース区分が不明のためコース日数を取得しません: レースコード=%s",
             df.iloc[0]["レースコード"],
         )
-        return df
+        return apply_missing_course_days(df)
 
     if cache is not None:
         cached_values = cache.get_course_days(key)

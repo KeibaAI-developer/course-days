@@ -17,7 +17,7 @@ import pandas as pd
 from keiba_data_interface import DataInterface
 
 from course_days.exceptions import LookbackLimitExceededError
-from course_days.params import CourseDaysKey
+from course_days.params import COURSE_DAYS_TYPES, CourseDaysKey
 
 # 同一コースの開催間隔がこの日数以上空いた場合、コース使用がリセットされたとみなす
 _RESET_GAP_DAYS = 14
@@ -162,7 +162,7 @@ def calc_course_days(
             "芝レースでないかコース区分が不明のためコース日数を計算しません: レースコード=%s",
             row["レースコード"],
         )
-        return df
+        return apply_missing_course_days(df)
 
     values = calc_course_days_for_key(key, data_interface, logger, cache)
     return apply_course_days(df, values)
@@ -257,6 +257,25 @@ def build_key(race_basic_info: pd.DataFrame) -> CourseDaysKey | None:
         str(row["開催月日"]),
         str(row["コース区分"]),
     )
+
+
+def apply_missing_course_days(df: pd.DataFrame) -> pd.DataFrame:
+    """芝コース日数4カラムを欠損値で設定する（対象外のレース用）.
+
+    ダートレースやコース区分が不明なレースでも、戻り値のカラム構成とdtypeを対象の
+    レースと揃える。呼び出し側は芝かどうかを気にせず4カラムを読める。既にカラムが
+    あれば触らない。
+
+    Args:
+        df (pd.DataFrame): 設定先のレース基本情報（1行）
+
+    Returns:
+        pd.DataFrame: 4カラムを欠損値で設定したDataFrame
+    """
+    for column, dtype in COURSE_DAYS_TYPES.items():
+        if column not in df.columns:
+            df[column] = pd.Series([pd.NA], dtype=dtype, index=df.index)
+    return df
 
 
 def apply_course_days(df: pd.DataFrame, values: dict[str, Any]) -> pd.DataFrame:
