@@ -17,6 +17,7 @@ import pandas as pd
 from keiba_data_interface import DataInterface
 
 from course_days.exceptions import LookbackLimitExceededError
+from course_days.params import CourseDaysKey
 
 # 同一コースの開催間隔がこの日数以上空いた場合、コース使用がリセットされたとみなす
 _RESET_GAP_DAYS = 14
@@ -155,22 +156,21 @@ def calc_course_days(
     logger = logger or logging.getLogger(__name__)
     df = race_basic_info.copy()
     row = df.iloc[0]
-    if row["芝ダ"] != "芝" or pd.isna(row["コース区分"]):
+    key = build_key(race_basic_info)
+    if key is None:
         logger.debug(
             "芝レースでないかコース区分が不明のためコース日数を計算しません: レースコード=%s",
             row["レースコード"],
         )
         return df
 
-    keibajo_code = str(row["競馬場コード"])
-    course_kubun = str(row["コース区分"])
-    key = (keibajo_code, str(row["開催年"]), str(row["開催月日"]), course_kubun)
+    keibajo_code, _, _, course_kubun = key
 
     if cache is not None:
         cached_values = cache.get_course_days(key)
         if cached_values is not None:
             logger.debug("コース日数をキャッシュから取得します: キー=%s", key)
-            return _apply_course_days(df, cached_values)
+            return apply_course_days(df, cached_values)
 
     race_date = _to_date(str(row["開催年"]), str(row["開催月日"]))
     logger.debug(
@@ -204,10 +204,34 @@ def calc_course_days(
         len(course_day_list),
         course_week,
     )
-    return _apply_course_days(df, values)
+    return apply_course_days(df, values)
 
 
-def _apply_course_days(df: pd.DataFrame, values: dict[str, Any]) -> pd.DataFrame:
+def build_key(race_basic_info: pd.DataFrame) -> CourseDaysKey | None:
+    """芝コース日数を識別するキーを組み立てる.
+
+    芝コース日数は「競馬場コード・開催年・開催月日・コース区分」で決まる。芝レースで
+    ない場合とコース区分が不明な場合は対象外であり、キーを組み立てない。
+
+    Args:
+        race_basic_info (pd.DataFrame): レース基本情報（1行）
+
+    Returns:
+        CourseDaysKey | None: (競馬場コード, 開催年, 開催月日, コース区分)。
+            対象外の場合はNone
+    """
+    row = race_basic_info.iloc[0]
+    if row["芝ダ"] != "芝" or pd.isna(row["コース区分"]):
+        return None
+    return (
+        str(row["競馬場コード"]),
+        str(row["開催年"]),
+        str(row["開催月日"]),
+        str(row["コース区分"]),
+    )
+
+
+def apply_course_days(df: pd.DataFrame, values: dict[str, Any]) -> pd.DataFrame:
     """計算済みのコース日数4カラムをDataFrameへ設定する
 
     キャッシュするのは計算した4カラムの値だけとし、呼び出しごとに渡された
