@@ -13,4 +13,4 @@ jobs:
     with:
       package_name: course_days
       repo_name: course-days
-      dependency_library: 'keiba-data-interface@develop db-client@develop'
+      dependency_library: 'keiba-domain@develop keiba-data-interface@develop db-client@develop'
