@@ -40,7 +40,7 @@ COLUMN_TO_DB: dict[str, str] = {
 
 # course_daysテーブルのDDL
 # 主キーは「競馬場コード・開催年・開催月日・コース区分」。芝コース日数はこの4つで決まる
-# 値でありレース単位の情報ではないため、レースごとに複製しない（5年分で数千行に収まる）。
+# 値でありレース単位の情報ではないため、レースごとに複製しない（開催日は1年あたり200日程度）。
 # first_dateはYYYYMMDDの文字列で持つ。日付型にすると移行元と戻り値が変わる
 TABLE_DDL: str = """
 CREATE TABLE IF NOT EXISTS course_days (

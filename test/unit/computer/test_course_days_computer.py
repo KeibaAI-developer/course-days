@@ -108,7 +108,7 @@ def test_compute_creates_table(computer: CourseDaysComputer, mock_store: MagicMo
 def test_compute_skips_saved_days(computer: CourseDaysComputer, mock_store: MagicMock) -> None:
     """保存済みの開催日を計算し直さない.
 
-    5年分をまとめて流すことを想定しており、途中で止まっても続きから再開できる
+    長い期間をまとめて流すことを想定しており、途中で止まっても続きから再開できる
     ようにする。
     """
     mock_store.select.return_value = {("05", "2025", "0608", "A"): _VALUES}
