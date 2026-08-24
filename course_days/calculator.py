@@ -164,15 +164,43 @@ def calc_course_days(
         )
         return df
 
-    keibajo_code, _, _, course_kubun = key
+    values = calc_course_days_for_key(key, data_interface, logger, cache)
+    return apply_course_days(df, values)
+
+
+def calc_course_days_for_key(
+    key: CourseDaysKey,
+    data_interface: DataInterface,
+    logger: logging.Logger | None = None,
+    cache: CourseDaysCache | None = None,
+) -> dict[str, Any]:
+    """キーから芝コース日数4カラムの値を計算する.
+
+    レース基本情報を持たない呼び出し（開催日を列挙して一括計算するバッチなど）でも
+    使えるよう、キーを直接受け取る形で切り出している。
+
+    Args:
+        key (CourseDaysKey): (競馬場コード, 開催年, 開催月日, コース区分)
+        data_interface (DataInterface): 過去レース取得に使用するデータ取得層
+        logger (logging.Logger | None): ロガーインスタンス
+        cache (CourseDaysCache | None): 計算結果と取得結果のキャッシュ
+
+    Returns:
+        dict[str, Any]: 芝コース日数4カラムの値
+
+    Raises:
+        LookbackLimitExceededError: 過去レースの遡及が上限日数を超えた場合
+    """
+    logger = logger or logging.getLogger(__name__)
+    keibajo_code, year, monthday, course_kubun = key
 
     if cache is not None:
         cached_values = cache.get_course_days(key)
         if cached_values is not None:
             logger.debug("コース日数をキャッシュから取得します: キー=%s", key)
-            return apply_course_days(df, cached_values)
+            return cached_values
 
-    race_date = _to_date(str(row["開催年"]), str(row["開催月日"]))
+    race_date = _to_date(year, monthday)
     logger.debug(
         "コース日数の計算を開始します: 競馬場コード=%s, コース区分=%s, 開催日=%s",
         keibajo_code,
@@ -204,7 +232,7 @@ def calc_course_days(
         len(course_day_list),
         course_week,
     )
-    return apply_course_days(df, values)
+    return values
 
 
 def build_key(race_basic_info: pd.DataFrame) -> CourseDaysKey | None:
@@ -252,96 +280,7 @@ def apply_course_days(df: pd.DataFrame, values: dict[str, Any]) -> pd.DataFrame:
     return df
 
 
-def _collect_same_course_days(
-    data_interface: DataInterface,
-    keibajo_code: str,
-    course_kubun: str,
-    race_date: date,
-    logger: logging.Logger,
-    cache: CourseDaysCache | None = None,
-) -> list[date]:
-    """対象レース日より前の同一競馬場・同一コース区分の開催日リストを昇順で返す
-
-    対象レース日から過去に向かって開催スケジュールを取得し、同一コース区分の開催日を収集する。
-    直近の同一コース開催日との間隔が_RESET_GAP_DAYS以上空いた時点で遡及を終了する。
-
-    Args:
-        data_interface (DataInterface): 過去レース取得に使用するデータ取得層
-        keibajo_code (str): 競馬場コード（2桁）
-        course_kubun (str): コース区分（A〜E）
-        race_date (date): 対象レースの開催日
-        logger (logging.Logger): ロガーインスタンス
-        cache (CourseDaysCache | None): 取得結果のキャッシュ
-
-    Returns:
-        list[date]: 同一コース区分の開催日リスト（昇順）
-
-    Raises:
-        LookbackLimitExceededError: 遡及が_MAX_LOOKBACK_DAYSを超えた場合
-    """
-    collected: list[date] = []
-    # 直近の同一コース開催日（遡及終了判定の基準）
-    latest = race_date
-    window_end = race_date - timedelta(days=1)
-    while (latest - window_end).days < _RESET_GAP_DAYS:
-        window_start = window_end - timedelta(days=_SCHEDULE_WINDOW_DAYS - 1)
-        if (race_date - window_start).days > _MAX_LOOKBACK_DAYS:
-            logger.error(
-                "コース日数計算の遡及が上限を超えました: 競馬場コード=%s, 開催日=%s",
-                keibajo_code,
-                race_date,
-            )
-            raise LookbackLimitExceededError(
-                f"コース日数計算の遡及が上限（{_MAX_LOOKBACK_DAYS}日）を超えました: "
-                f"競馬場コード={keibajo_code}, 開催日={race_date}"
-            )
-        schedule_df = _get_schedule(data_interface, window_start, window_end, cache)
-        venue_days_df = _extract_venue_days(schedule_df, keibajo_code)
-        for _, schedule_row in venue_days_df.iterrows():
-            day = _to_date(str(schedule_row["開催年"]), str(schedule_row["開催月日"]))
-            if (latest - day).days >= _RESET_GAP_DAYS:
-                return sorted(collected)
-            day_course_kubun = _get_course_kubun_of_day(data_interface, schedule_row, logger, cache)
-            if day_course_kubun == course_kubun:
-                collected.append(day)
-                latest = day
-        window_end = window_start - timedelta(days=1)
-    return sorted(collected)
-
-
-def _get_schedule(
-    data_interface: DataInterface,
-    start_date: date,
-    end_date: date,
-    cache: CourseDaysCache | None,
-) -> pd.DataFrame:
-    """開催スケジュールを取得する
-
-    同じ期間を繰り返し取得しないようキャッシュする。戻り値は呼び出し側で変更しない
-    こと（`_extract_venue_days`は絞り込みで新しいDataFrameを作るため変更しない）。
-
-    Args:
-        data_interface (DataInterface): 取得に使用するデータ取得層
-        start_date (date): 開始日
-        end_date (date): 終了日
-        cache (CourseDaysCache | None): 取得結果のキャッシュ
-
-    Returns:
-        pd.DataFrame: 開催スケジュールのDataFrame
-    """
-    key = (start_date.isoformat(), end_date.isoformat())
-    if cache is not None:
-        cached_schedule = cache.get_schedule(key)
-        if cached_schedule is not None:
-            return cached_schedule
-
-    schedule_df = data_interface.get_schedule(key[0], key[1])
-    if cache is not None:
-        cache.set_schedule(key, schedule_df)
-    return schedule_df
-
-
-def _get_course_kubun_of_day(
+def get_course_kubun_of_day(
     data_interface: DataInterface,
     schedule_row: "pd.Series[Any]",
     logger: logging.Logger,
@@ -392,6 +331,111 @@ def _get_course_kubun_of_day(
     if cache is not None:
         cache.set_course_kubun(key, course_kubun)
     return course_kubun
+
+
+def extract_venue_days(schedule_df: pd.DataFrame, keibajo_code: str) -> pd.DataFrame:
+    """開催スケジュールから指定競馬場の開催日行を新しい順に取り出す
+
+    Args:
+        schedule_df (pd.DataFrame): 開催スケジュールのDataFrame
+        keibajo_code (str): 競馬場コード（2桁）
+
+    Returns:
+        pd.DataFrame: 指定競馬場の開催日行（開催日の降順、開催日単位で重複排除）
+    """
+    df = schedule_df[schedule_df["競馬場コード"] == keibajo_code]
+    df = df.drop_duplicates(subset=["開催年", "開催月日"])
+    df = df.sort_values(["開催年", "開催月日"], ascending=False)
+    return df.reset_index(drop=True)
+
+
+def _collect_same_course_days(
+    data_interface: DataInterface,
+    keibajo_code: str,
+    course_kubun: str,
+    race_date: date,
+    logger: logging.Logger,
+    cache: CourseDaysCache | None = None,
+) -> list[date]:
+    """対象レース日より前の同一競馬場・同一コース区分の開催日リストを昇順で返す
+
+    対象レース日から過去に向かって開催スケジュールを取得し、同一コース区分の開催日を収集する。
+    直近の同一コース開催日との間隔が_RESET_GAP_DAYS以上空いた時点で遡及を終了する。
+
+    Args:
+        data_interface (DataInterface): 過去レース取得に使用するデータ取得層
+        keibajo_code (str): 競馬場コード（2桁）
+        course_kubun (str): コース区分（A〜E）
+        race_date (date): 対象レースの開催日
+        logger (logging.Logger): ロガーインスタンス
+        cache (CourseDaysCache | None): 取得結果のキャッシュ
+
+    Returns:
+        list[date]: 同一コース区分の開催日リスト（昇順）
+
+    Raises:
+        LookbackLimitExceededError: 遡及が_MAX_LOOKBACK_DAYSを超えた場合
+    """
+    collected: list[date] = []
+    # 直近の同一コース開催日（遡及終了判定の基準）
+    latest = race_date
+    window_end = race_date - timedelta(days=1)
+    while (latest - window_end).days < _RESET_GAP_DAYS:
+        window_start = window_end - timedelta(days=_SCHEDULE_WINDOW_DAYS - 1)
+        if (race_date - window_start).days > _MAX_LOOKBACK_DAYS:
+            logger.error(
+                "コース日数計算の遡及が上限を超えました: 競馬場コード=%s, 開催日=%s",
+                keibajo_code,
+                race_date,
+            )
+            raise LookbackLimitExceededError(
+                f"コース日数計算の遡及が上限（{_MAX_LOOKBACK_DAYS}日）を超えました: "
+                f"競馬場コード={keibajo_code}, 開催日={race_date}"
+            )
+        schedule_df = _get_schedule(data_interface, window_start, window_end, cache)
+        venue_days_df = extract_venue_days(schedule_df, keibajo_code)
+        for _, schedule_row in venue_days_df.iterrows():
+            day = _to_date(str(schedule_row["開催年"]), str(schedule_row["開催月日"]))
+            if (latest - day).days >= _RESET_GAP_DAYS:
+                return sorted(collected)
+            day_course_kubun = get_course_kubun_of_day(data_interface, schedule_row, logger, cache)
+            if day_course_kubun == course_kubun:
+                collected.append(day)
+                latest = day
+        window_end = window_start - timedelta(days=1)
+    return sorted(collected)
+
+
+def _get_schedule(
+    data_interface: DataInterface,
+    start_date: date,
+    end_date: date,
+    cache: CourseDaysCache | None,
+) -> pd.DataFrame:
+    """開催スケジュールを取得する
+
+    同じ期間を繰り返し取得しないようキャッシュする。戻り値は呼び出し側で変更しない
+    こと（`_extract_venue_days`は絞り込みで新しいDataFrameを作るため変更しない）。
+
+    Args:
+        data_interface (DataInterface): 取得に使用するデータ取得層
+        start_date (date): 開始日
+        end_date (date): 終了日
+        cache (CourseDaysCache | None): 取得結果のキャッシュ
+
+    Returns:
+        pd.DataFrame: 開催スケジュールのDataFrame
+    """
+    key = (start_date.isoformat(), end_date.isoformat())
+    if cache is not None:
+        cached_schedule = cache.get_schedule(key)
+        if cached_schedule is not None:
+            return cached_schedule
+
+    schedule_df = data_interface.get_schedule(key[0], key[1])
+    if cache is not None:
+        cache.set_schedule(key, schedule_df)
+    return schedule_df
 
 
 def _build_race_codes_of_day(schedule_row: "pd.Series[Any]") -> list[str]:
@@ -479,22 +523,6 @@ def _extract_course_kubun(race_row: "pd.Series[Any]") -> str | None:
     if race_row["芝ダ"] != "芝" or pd.isna(race_row["コース区分"]):
         return None
     return str(race_row["コース区分"])
-
-
-def _extract_venue_days(schedule_df: pd.DataFrame, keibajo_code: str) -> pd.DataFrame:
-    """開催スケジュールから指定競馬場の開催日行を新しい順に取り出す
-
-    Args:
-        schedule_df (pd.DataFrame): 開催スケジュールのDataFrame
-        keibajo_code (str): 競馬場コード（2桁）
-
-    Returns:
-        pd.DataFrame: 指定競馬場の開催日行（開催日の降順、開催日単位で重複排除）
-    """
-    df = schedule_df[schedule_df["競馬場コード"] == keibajo_code]
-    df = df.drop_duplicates(subset=["開催年", "開催月日"])
-    df = df.sort_values(["開催年", "開催月日"], ascending=False)
-    return df.reset_index(drop=True)
 
 
 def _to_date(year: str, monthday: str) -> date:
