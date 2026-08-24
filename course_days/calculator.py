@@ -263,8 +263,9 @@ def apply_missing_course_days(df: pd.DataFrame) -> pd.DataFrame:
     """芝コース日数4カラムを欠損値で設定する（対象外のレース用）.
 
     ダートレースやコース区分が不明なレースでも、戻り値のカラム構成とdtypeを対象の
-    レースと揃える。呼び出し側は芝かどうかを気にせず4カラムを読める。既にカラムが
-    あれば触らない。
+    レースと揃える。呼び出し側は芝かどうかを気にせず4カラムを読める。渡された
+    レース基本情報に4カラムが既にあっても、対象外のレースに値が入っているのは誤りで
+    あるため、無条件に欠損値で上書きする。
 
     Args:
         df (pd.DataFrame): 設定先のレース基本情報（1行）
@@ -273,8 +274,7 @@ def apply_missing_course_days(df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: 4カラムを欠損値で設定したDataFrame
     """
     for column, dtype in COURSE_DAYS_TYPES.items():
-        if column not in df.columns:
-            df[column] = pd.Series([pd.NA], dtype=dtype, index=df.index)
+        df[column] = pd.Series([pd.NA], dtype=dtype, index=df.index)
     return df
 
 
