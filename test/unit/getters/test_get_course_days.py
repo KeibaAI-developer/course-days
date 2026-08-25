@@ -285,6 +285,55 @@ def test_out_of_scope_race_returns_na_without_touching_db(
     mock_calculate.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    ("turf_dirt", "course_kubun"),
+    [("ダート", "A"), ("芝", None)],
+    ids=["dirt", "unknown_course_kubun"],
+)
+def test_out_of_scope_race_gets_columns_even_if_absent(
+    mock_db_client: MagicMock,
+    mock_data_interface: MagicMock,
+    mock_store: MagicMock,
+    turf_dirt: str,
+    course_kubun: str | None,
+) -> None:
+    """レース基本情報に4カラムが無くても、対象外のレースで欠損値の4カラムが付く.
+
+    呼び出し側は芝かどうかを気にせず4カラムを読む。dtypeも対象のレースと揃える。
+    """
+    race_basic_info = _make_race_basic_info(turf_dirt, course_kubun).drop(
+        columns=COURSE_DAYS_COLUMNS
+    )
+
+    with patch("course_days.getters.CourseDaysStore", return_value=mock_store):
+        result = get_course_days(race_basic_info, mock_data_interface, mock_db_client)
+
+    for column in COURSE_DAYS_COLUMNS:
+        assert pd.isna(result[column].iloc[0])
+    assert result["芝コース日目"].dtype == pd.Int64Dtype()
+    assert result["芝コース初日"].dtype == object
+    assert result["芝コース経過日数"].dtype == pd.Int64Dtype()
+    assert result["芝コース週目"].dtype == pd.Int64Dtype()
+
+
+def test_out_of_scope_race_overwrites_existing_values_with_na(
+    mock_db_client: MagicMock, mock_data_interface: MagicMock, mock_store: MagicMock
+) -> None:
+    """対象外のレースでは、4カラムに値が入っていても欠損値で上書きする.
+
+    ダートレースに芝コース日数の値が入っているのは誤りであり、残さない。
+    """
+    race_basic_info = _make_calculated(_SAVED)
+    race_basic_info["芝ダ"] = ["ダート"]
+
+    with patch("course_days.getters.CourseDaysStore", return_value=mock_store):
+        result = get_course_days(race_basic_info, mock_data_interface, mock_db_client)
+
+    for column in COURSE_DAYS_COLUMNS:
+        assert pd.isna(result[column].iloc[0])
+    assert result["芝コース日目"].dtype == pd.Int64Dtype()
+
+
 # 異常系
 def test_calculation_error_is_propagated(
     mock_db_client: MagicMock, mock_data_interface: MagicMock, mock_store: MagicMock
