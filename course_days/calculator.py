@@ -15,6 +15,7 @@ from typing import Any
 
 import pandas as pd
 from keiba_data_interface import DataInterface
+from keiba_data_interface.exceptions import DataNotFoundError
 
 from course_days.exceptions import LookbackLimitExceededError
 from course_days.params import COURSE_DAYS_TYPES, CourseDaysKey
@@ -504,7 +505,8 @@ def _find_course_kubun_one_by_one(
 ) -> str | None:
     """レース基本情報を1件ずつ取得して最初の芝レースのコース区分を返す
 
-    一括取得に対応していないProvider向けの経路。
+    一括取得に対応していないProvider向けの経路。存在しないレース番号（欠番）は
+    `DataNotFoundError` で読み飛ばす。それ以外の失敗はそのまま伝播させる。
 
     Args:
         data_interface (DataInterface): 過去レース取得に使用するデータ取得層
@@ -517,12 +519,9 @@ def _find_course_kubun_one_by_one(
     for race_code in race_codes:
         try:
             race_row = data_interface.get_race_basic_info(race_code).iloc[0]
-        except ValueError as exc:
-            logger.debug(
-                "レース基本情報を取得できなかったため読み飛ばします: race_code=%s, %s",
-                race_code,
-                exc,
-            )
+        except DataNotFoundError:
+            # 開催日に存在しないレース番号（欠番）。存在しないこと以外の失敗は伝播させる
+            logger.debug("レースが存在しないため読み飛ばします: race_code=%s", race_code)
             continue
         course_kubun = _extract_course_kubun(race_row)
         if course_kubun is not None:

@@ -236,6 +236,28 @@ def test_one_by_one_provider_does_not_use_bulk() -> None:
     assert data_interface.get_race_basic_info_calls != []
 
 
+def test_one_by_one_propagates_errors_other_than_not_found() -> None:
+    """個別取得の経路で、存在しないこと以外の失敗は読み飛ばさず伝播する.
+
+    ValueError（データの不整合など）を欠番とみなして黙って読み飛ばすと、
+    誤ったコース区分を正常値として返してしまう。
+    """
+    target_date = date(2025, 6, 8)
+    data_interface = MockDataInterface(
+        [RaceDay(target_date - timedelta(days=7), 1, 1, turf_day_races("A"))],
+        supports_bulk=False,
+    )
+
+    def broken(race_code: str) -> pd.DataFrame:
+        raise ValueError("データが不正です")
+
+    data_interface.get_race_basic_info = broken  # type: ignore[method-assign]
+    race_basic_info = build_race_basic_info(target_date, "芝", "A")
+
+    with pytest.raises(ValueError, match="データが不正です"):
+        calc_course_days(race_basic_info, data_interface)
+
+
 @pytest.mark.parametrize("supports_bulk", [True, False])
 def test_missing_low_race_numbers_are_skipped(supports_bulk: bool) -> None:
     """レース番号1・2が欠番でも3レース目の芝レースのコース区分で判定される."""
