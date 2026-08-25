@@ -22,7 +22,9 @@ from course_days import COURSE_DAYS_COLUMNS, COURSE_DAYS_TYPES, TABLE_NAME, Cour
 
 ## `course_days` テーブル
 
-`TABLE_DDL` で作成されるテーブルです。主キーは `(keibajo_code, kaisai_year, kaisai_month_day, course_kubun)`。芝コース日数は「競馬場・開催日・コース区分」で決まる値でありレース単位の情報ではないため、レースごとに複製しません。
+`TABLE_DDL` で作成されるテーブルです。
+主キーは `(keibajo_code, kaisai_year, kaisai_month_day, course_kubun)`。
+芝コース日数は「競馬場・開催日・コース区分」で決まる値でありレース単位の情報ではないため、レースごとに複製しません。
 
 | カラム名 | 型 | 説明 |
 |---|---|---|
@@ -37,4 +39,5 @@ from course_days import COURSE_DAYS_COLUMNS, COURSE_DAYS_TYPES, TABLE_NAME, Cour
 | `created_at` | `TIMESTAMPTZ NOT NULL DEFAULT NOW()` | 登録日時 |
 | `updated_at` | `TIMESTAMPTZ NOT NULL DEFAULT NOW()` | 更新日時。`upsert` 時に明示的に更新される |
 
-保存先はKeibaAIのDB（db-client）です。mykeibadbのDBはmykeibadbという提供ソフトが生成するものであり、こちらから手を入れません。
+保存先はKeibaAIのDB（db-client）です。
+mykeibadbのDBはmykeibadbという提供ソフトが生成するものであり、こちらから手を入れません。
