@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import date
 
 import pandas as pd
+from keiba_data_interface.exceptions import DataNotFoundError
 from keiba_data_interface.schema.columns import RACE_BASIC_INFO_COLUMNS
 
 # 競馬場コード（東京）
@@ -82,12 +83,14 @@ class MockDataInterface:
             pd.DataFrame: 芝ダ・コース区分を含むレース基本情報のDataFrame（1行）
 
         Raises:
-            ValueError: 開催日データに存在しないレースコードの場合
+            DataNotFoundError: 開催日データに存在しないレースコードの場合
         """
         self.get_race_basic_info_calls.append(race_code)
         row = self._build_race_row(race_code)
         if row is None:
-            raise ValueError(f"get_race_shosai()が空のDataFrameを返しました: race_code={race_code}")
+            raise DataNotFoundError(
+                f"get_race_shosai()が空のDataFrameを返しました: race_code={race_code}"
+            )
         return pd.DataFrame([row])[["芝ダ", "コース区分"]]
 
     def get_race_basic_info_bulk(self, race_codes: list[str]) -> pd.DataFrame:
