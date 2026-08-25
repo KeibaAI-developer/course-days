@@ -78,12 +78,26 @@ python scripts/compute_course_days.py --start_date 2020-01-01 --end_date 2025-12
 
 **保存済みの開催日は計算し直しません。** 途中で止まっても再実行すれば続きから進みます。100件ごとに保存するため、長時間の実行が途中で落ちてもそこまでの結果は残ります。
 
-実行例は `example/` を参照してください。
+実行例は [example/example_get_course_days.py](example/example_get_course_days.py) を参照してください。
 
 ## ドキュメント
 
-- [SPEC](https://github.com/KeibaAI-developer/course-days/issues/1) — 仕様
-- [PLAN](https://github.com/KeibaAI-developer/course-days/issues/2) — 実装計画
+### アルゴリズム
+
+- [algorithm.md](doc/ALGORITHM/algorithm.md) — 芝コース日数の定式化（遡及・集計・計算例）
+
+### API
+
+- [getters.md](doc/API/getters.md) — `get_course_days`（呼び出し側が使う取得API）
+- [calculator.md](doc/API/calculator.md) — 計算アルゴリズムと `CourseDaysCache`
+- [store.md](doc/API/store.md) — `CourseDaysStore`（テーブルの読み書き）
+- [computer.md](doc/API/computer.md) — `CourseDaysComputer`（一括計算・保存）とスクリプト
+- [params.md](doc/API/params.md) — 定数とテーブル定義
+- [exceptions.md](doc/API/exceptions.md) — 例外
+
+### 経緯
+
+- [SPEC](https://github.com/KeibaAI-developer/course-days/issues/1) / [PLAN](https://github.com/KeibaAI-developer/course-days/issues/2)
 
 ## テスト
 
