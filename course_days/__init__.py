@@ -11,6 +11,7 @@ from course_days.getters import get_course_days
 from course_days.params import (
     COURSE_DAYS_COLUMNS,
     COURSE_DAYS_TYPES,
+    TABLE_DDL,
     TABLE_NAME,
     CourseDaysKey,
 )
@@ -19,6 +20,7 @@ from course_days.store import CourseDaysStore
 __all__ = [
     "COURSE_DAYS_COLUMNS",
     "COURSE_DAYS_TYPES",
+    "TABLE_DDL",
     "TABLE_NAME",
     "CourseDaysCache",
     "CourseDaysComputer",
